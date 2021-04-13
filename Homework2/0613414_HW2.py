@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # 4. Compute the Fisher’s linear discriminant
     w = mul(np.linalg.inv(sw), t_sb)
     assert w.shape == (2, 1)
-    print(f" Fisher’s linear discriminant:\n{w}\n")
+    print(f"Fisher’s linear discriminant:\n{w}\n")
 
     # 5. Project the test data and calculate the accuracy score
 
