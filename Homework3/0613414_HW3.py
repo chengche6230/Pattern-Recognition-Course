@@ -85,28 +85,40 @@ class DecisionTree():
                 right_df = right_df.append(tree.x.loc[tree.x.index[i]])
         left = Tree(left_df, tree.depth + 1)
         right = Tree(right_df, tree.depth + 1)
+        if len(left.x) <= 0:
+            left.isLeaf = True
+        if len(right.x) <= 0:
+            right.isLeaf = True
         return left, right
         
     def genTree(self, tree):
+        # Init tree info.
         tree.info = impurity(tree.x['label'], self.criterion)
-        #tree.Print()
         if tree.depth >= self.max_depth:
             tree.isLeaf = True
             return tree
+        
+        # Select best split attribute and threshold
         info_gain, attr_index, threshold = self.splitAttr(tree.x, tree.info)
-        #print(info_gain, attr_index, threshold)
         if info_gain == 0:
             tree.isLeaf = True
             return tree
+        
+        # Partition tree
         left, right = self.partiTree(tree, attr_index, threshold)
         tree.setting(attr_index, threshold, left, right)
-        self.genTree(left)
-        self.genTree(right)
+        
+        # Move to tree's children
+        if not left.isLeaf:
+            self.genTree(left)
+        if not right.isLeaf:
+            self.genTree(right)
     
     def fit(self, x):
         self.tree = Tree(x, 1)
         self.genTree(self.tree)
         
+    # Given X, return a predict class
     def model(self, test):
         tmp = self.tree
         while True:
@@ -146,12 +158,16 @@ if __name__ == "__main__":
     train = pd.concat([x_train, y_train], axis=1)
     train = train.rename(columns={'0': 'label'})
     
+    print("--------------------------------------------")
     # Question 1
+    print("Question 1")
     data = np.array([1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0])
     print("Gini of data is ", gini(data))
     print("Entropy of data is ", entropy(data))
-    print("--------------------------------------------")
     
+    print("--------------------------------------------")
+    # Question 2.1
+    print("Question 2.1")
     clf_depth3 = DecisionTree(criterion='gini', max_depth=3)
     clf_depth3.fit(train)
     y_pred = clf_depth3.predict(x_test)
@@ -162,10 +178,11 @@ if __name__ == "__main__":
     clf_depth10.fit(train)
     y_pred = clf_depth10.predict(x_test)
     acc = accuracy_score(y_test, y_pred)
-    ## Still has [RuntimeWarning: invalid value encountered in longlong_scalars]
     print("Criterion = Gini, Max Depth = 10, Acc:", acc)
-    print("--------------------------------------------")
     
+    print("--------------------------------------------")
+    # Question 2.2
+    print("Question 2.2")
     clf_gini = DecisionTree(criterion='gini', max_depth=3)
     clf_gini.fit(train)
     y_pred = clf_gini.predict(x_test)
@@ -176,8 +193,7 @@ if __name__ == "__main__":
     clf_entropy.fit(train)
     y_pred = clf_entropy.predict(x_test)
     acc = accuracy_score(y_test, y_pred)
-    print("Criterion = Entropy, Max Depth = 3, Acc:", acc)
-    print("--------------------------------------------")
+    print("Criterion = Entropy, Max Depth = 3, Acc:", acc)    
     
     '''
     # Visualize
