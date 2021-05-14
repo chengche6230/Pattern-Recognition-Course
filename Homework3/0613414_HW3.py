@@ -5,6 +5,7 @@ Pattern Recongition Course
 """
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.datasets import load_breast_cancer
 from sklearn.metrics import accuracy_score
 
@@ -12,6 +13,8 @@ from sklearn.metrics import accuracy_score
 _class = [0, 1]
 train_num = 426
 test_num = 143
+feature_num = 30
+feature_name = None
 
 def gini(sequence):
     gini = 1
@@ -60,6 +63,8 @@ class DecisionTree():
     def __init__(self, criterion='gini', max_depth=None):
         self.criterion = criterion
         self.max_depth = max_depth
+        self.tree = None
+        self.importance = dict.fromkeys(feature_name, 0)
     
     def splitAttr(self, x, info):
         attr_index, threshold = 0, 0.0
@@ -94,12 +99,13 @@ class DecisionTree():
     def genTree(self, tree):
         # Init tree info.
         tree.info = impurity(tree.x['label'], self.criterion)
-        if tree.depth >= self.max_depth:
+        if tree.depth >= self.max_depth or tree.info == 0:
             tree.isLeaf = True
             return tree
         
         # Select best split attribute and threshold
         info_gain, attr_index, threshold = self.splitAttr(tree.x, tree.info)
+        #print(f'Depth:{tree.depth}, {info_gain}, at {attr_index}({feature_name[attr_index]})')
         if info_gain == 0:
             tree.isLeaf = True
             return tree
@@ -118,8 +124,8 @@ class DecisionTree():
         self.tree = Tree(x, 1)
         self.genTree(self.tree)
         
-    # Given X, return a predict class
     def model(self, test):
+        # Given X, return a predict class
         tmp = self.tree
         while True:
             if test[tmp.attr_index] <= tmp.threshold:
@@ -141,6 +147,23 @@ class DecisionTree():
             pred_y[i] = self.model(X.values[i])  
         return pred_y
     
+    def countImportance(self, tree):
+        if tree.attr_index != -1:
+            self.importance[feature_name[tree.attr_index]] += 1
+        
+        if tree.left != None:
+            self.countImportance(tree.left)
+        if tree.right != None:
+            self.countImportance(tree.right)
+
+def visualize(importance):
+    imp = dict(sorted(importance.items(), key=lambda d: d[1]))
+    imp = {k:v for k,v in imp.items() if v != 0} # rm empty value
+    plt.style.use('ggplot')
+    plt.title('Feature Importance')
+    plt.barh(list(imp.keys()),imp.values())
+    plt.show()
+    
 class RandomForest():
     def __init__(self, n_estimators, max_features, boostrap=True, criterion='gini', max_depth=None):
         return None
@@ -157,6 +180,7 @@ if __name__ == "__main__":
     y_test = np.array(y_test_df['0']) # as np array
     train = pd.concat([x_train, y_train], axis=1)
     train = train.rename(columns={'0': 'label'})
+    feature_name = [s for s in x_train.columns]
     
     print("--------------------------------------------")
     # Question 1
@@ -195,9 +219,13 @@ if __name__ == "__main__":
     acc = accuracy_score(y_test, y_pred)
     print("Criterion = Entropy, Max Depth = 3, Acc:", acc)    
     
-    '''
-    # Visualize
+    print("--------------------------------------------")
+    # Question 3: Visualize
+    print("Question 3: visualize as plot")
+    clf_depth10.countImportance(clf_depth10.tree)
+    visualize(clf_depth10.importance)
     
+    '''
     clf_10tree = RandomForest(n_estimators=10, max_features=np.sqrt(x_train.shape[1]))
     clf_100tree = RandomForest(n_estimators=100, max_features=np.sqrt(x_train.shape[1]))
     
