@@ -36,6 +36,7 @@ def impurity(sequence, mode):
         return entropy(sequence)
     else:
         return None
+
 class Tree():
     def __init__(self, x, depth, isLeaf=False):
         self.x = x
@@ -56,38 +57,8 @@ class Tree():
     def Print(self):
         print('----------------------------')
         print(f'#:{len(self.x)} Depth:{self.depth}, isLeaf:{self.isLeaf}, info:{self.info}')
-        print(np.sum(self.x['label']==0),np.sum(self.x['label']==1))
-
-def splitAttr(x, info, criterion):
-    attr_index, threshold = 0, 0.0
-    info_gain = 0
-    for col in range(len(x.columns)-1): # exclude label column
-        tmp_x = x.sort_values(by=[x.columns[col]])
-        for i in range(len(x)):
-            left = impurity(tmp_x.values[0:i+1, -1], criterion)
-            right = impurity(tmp_x.values[i:train_num, -1], criterion)
-            info_p = ((i + 1) * left + (train_num - i + 1) * right) / train_num
-            if info - info_p > info_gain:
-                info_gain = info - info_p
-                attr_index, threshold = col, tmp_x.values[i, col]
-    return info_gain, attr_index, threshold
-    
-def partiTree(tree, attr_index, threshold):
-    left_df = pd.DataFrame(columns=tree.x.columns)
-    right_df = pd.DataFrame(columns=tree.x.columns)
-    for i in range(len(tree.x)):
-        if tree.x.values[i, attr_index] <= threshold:
-            left_df = left_df.append(tree.x.iloc[i])
-        else:
-            right_df = right_df.append(tree.x.iloc[i])
-    left = Tree(left_df, tree.depth + 1)
-    right = Tree(right_df, tree.depth + 1)
-    if len(left.x) <= 0:
-        left.isLeaf = True
-    if len(right.x) <= 0:
-        right.isLeaf = True
-    return left, right
-
+        print(f"0:{np.sum(self.x['label']==0)}, 1:{np.sum(self.x['label']==1)}")
+   
 class DecisionTree():
     def __init__(self, criterion='gini', max_depth=None):
         self.criterion = criterion
@@ -132,15 +103,17 @@ class DecisionTree():
             tree.isLeaf = True
             return tree
         
-        # Select best split attribute and threshold
-        info_gain, attr_index, threshold = self.splitAttr(tree.x, tree.info)
-        #print(f'Depth:{tree.depth}, {info_gain}, at {attr_index}({feature_name[attr_index]})')
-        if info_gain == 0:
-            tree.isLeaf = True
-            return tree
-        
-        # Partition tree
-        left, right = self.partiTree(tree, attr_index, threshold)
+        for _iter in range(10):
+            # Select best split attribute and threshold
+            info_gain, attr_index, threshold = self.splitAttr(tree.x, tree.info)
+            if info_gain == 0:
+                tree.isLeaf = True
+                return tree
+            
+            # Partition tree
+            left, right = self.partiTree(tree, attr_index, threshold)
+            if len(left.x) != len(tree.x) and len(right.x) != len(tree.x):
+                break
         tree.setting(attr_index, threshold, left, right)
         
         # Move to tree's children
@@ -199,9 +172,39 @@ class RandomForest():
         self.max_features = int(max_features)
         self.boostrap = boostrap
         self.criterion = criterion
-        self.max_depth = 10
+        self.max_depth = 15
         self.forest = []
-        
+    
+    def splitAttr(self, x, info):
+        attr_index, threshold = 0, 0.0
+        info_gain = 0
+        for col in range(len(x.columns)-1): # exclude label column
+            tmp_x = x.sort_values(by=[x.columns[col]])
+            for i in range(len(x)):
+                left = impurity(tmp_x.values[0:i+1, -1], self.criterion)
+                right = impurity(tmp_x.values[i:train_num, -1], self.criterion)
+                info_p = ((i + 1) * left + (train_num - i + 1) * right) / train_num
+                if info - info_p > info_gain:
+                    info_gain = info - info_p
+                    attr_index, threshold = col, tmp_x.values[i, col]
+        attr_index = feature_name.index(x.columns[attr_index])
+        return info_gain, attr_index, threshold
+    def partiTree(self, tree, attr_index, threshold):
+        left_df = pd.DataFrame(columns=tree.x.columns)
+        right_df = pd.DataFrame(columns=tree.x.columns)
+        for i in range(len(tree.x)):
+            if tree.x.values[i, attr_index] <= threshold:
+                left_df = left_df.append(tree.x.iloc[i])
+            else:
+                right_df = right_df.append(tree.x.iloc[i])
+        left = Tree(left_df, tree.depth + 1)
+        right = Tree(right_df, tree.depth + 1)
+        if len(left.x) <= 0:
+            left.isLeaf = True
+        if len(right.x) <= 0:
+            right.isLeaf = True
+        return left, right
+    
     def featureDelete(self):
         selected = np.random.choice(feature_num, self.max_features, replace=False)
         return np.delete(np.arange(feature_num), selected)
@@ -209,35 +212,34 @@ class RandomForest():
     def growTree(self, tree):
         # Init tree info.
         tree.info = impurity(tree.x['label'], self.criterion)
-        #input()
-        #tree.Print()
         if tree.depth >= self.max_depth or tree.info == 0:
             tree.isLeaf = True
             return tree
         
-        # Randomly select m attribute
-        tmp_df = tree.x.copy()
-        delete_feature = self.featureDelete()
-        tmp_df = tmp_df.drop(columns=[feature_name[i] for i in delete_feature])
-        #print(tmp_df)
+        # Loop for preventing useless split
+        for _iter in range(3):
+            # Randomly select m attribute
+            tmp_df = tree.x.copy()
+            delete_feature = self.featureDelete()
+            tmp_df = tmp_df.drop(columns=[feature_name[i] for i in delete_feature])
+            
+            # Select best split attribute and threshold
+            info_gain, attr_index, threshold = self.splitAttr(tmp_df, tree.info)
+            if info_gain == 0:
+                tree.isLeaf = True
+                return tree
+            
+            # Partition tree
+            left, right = self.partiTree(tree, attr_index, threshold)
+            if len(left.x) != len(tree.x) and len(right.x) != len(tree.x):
+                break
         
-        # Select best split attribute and threshold
-        info_gain, attr_index, threshold = splitAttr(tmp_df, tree.info, self.criterion)
-        #print(f'Depth:{tree.depth}, {info_gain}, at {attr_index}({feature_name[attr_index]})')
-        if info_gain == 0:
-            tree.isLeaf = True
-            return tree
-        
-        # Partition tree
-        left, right = partiTree(tree, attr_index, threshold)
         tree.setting(attr_index, threshold, left, right)
         
         # Move to tree's children
         if not left.isLeaf:
-            #print('In left')
             self.growTree(left)
         if not right.isLeaf:
-            #print('In right')
             self.growTree(right)
         return tree
     
@@ -253,7 +255,7 @@ class RandomForest():
             data = self.Bagging(X) if self.boostrap else X
             root = Tree(data, 1)
             self.forest.append(self.growTree(root))
-    
+                
     def model(self, test):
         vote = np.zeros((len(_class)), dtype=np.uint32)
         for n in range(self.n_estimators):
@@ -281,7 +283,7 @@ class RandomForest():
         return pred_y
 
 if __name__ == "__main__":
-    #data = load_breast_cancer()
+    data = load_breast_cancer()
     #feature_names = data['feature_names']
     #print(feature_names)
     
@@ -294,14 +296,6 @@ if __name__ == "__main__":
     train = train.rename(columns={'0': 'label'})
     feature_name = [s for s in x_train.columns]
     
-    
-    tmp = RandomForest(n_estimators=10, max_features=np.sqrt(x_train.shape[1]))
-    tmp.buildForest(train)
-    y_pred = tmp.predict(x_test)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"# of estimoators = 10, Maximum # of features = 5, Acc: {acc}")
-    
-    '''
     print("------------------------------------------------------")
     # Question 1
     print("Question 1")
@@ -311,7 +305,7 @@ if __name__ == "__main__":
     
     print("------------------------------------------------------")
     # Question 2.1
-    print("Question 2.1")
+    print("Question 2.1: Decision tree with different depth")
     clf_depth3 = DecisionTree(criterion='gini', max_depth=3)
     clf_depth3.fit(train)
     y_pred = clf_depth3.predict(x_test)
@@ -326,7 +320,7 @@ if __name__ == "__main__":
     
     print("------------------------------------------------------")
     # Question 2.2
-    print("Question 2.2")
+    print("Question 2.2: Decision Tree with different criterion")
     clf_gini = DecisionTree(criterion='gini', max_depth=3)
     clf_gini.fit(train)
     y_pred = clf_gini.predict(x_test)
@@ -344,9 +338,9 @@ if __name__ == "__main__":
     print("Question 3: visualize as plot")
     clf_depth10.countImportance(clf_depth10.tree)
     visualize(clf_depth10.importance)
-    '''
-    '''
+    
     print("------------------------------------------------------")
+    print("Question 4.1: Random forest with different # of estimator")
     # Question 4.1: Random Forest
     clf_10tree = RandomForest(n_estimators=10, max_features=np.sqrt(x_train.shape[1]))
     clf_10tree.buildForest(train)
@@ -362,6 +356,7 @@ if __name__ == "__main__":
     
     print("------------------------------------------------------")
     # Question 4.2
+    print("Question 4.2: Random forest with different # of feature")
     clf_random_features = RandomForest(n_estimators=10, max_features=np.sqrt(x_train.shape[1]))
     clf_random_features.buildForest(train)
     y_pred = clf_random_features.predict(x_test)
@@ -374,5 +369,5 @@ if __name__ == "__main__":
     acc = accuracy_score(y_test, y_pred)
     print(f"# of estimoators = 10, Maximum # of features = 30, Acc: {acc}")
     print("------------------------------------------------------")
-    '''
+    
     
