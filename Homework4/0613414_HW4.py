@@ -12,10 +12,12 @@ from sklearn.metrics import accuracy_score
 C = [0.01, 0.1, 1, 10, 100, 1000, 10000]
 gamma = [1e-4, 1e-3, 0.01, 0.1, 1, 10, 100, 1000]
 
+
 def kfold(length):
     arr = np.arange(length)
     np.random.shuffle(arr)
     return arr
+
 
 def cross_validation(x_train, y_train, k=5):
     k_fold = []
@@ -31,12 +33,14 @@ def cross_validation(x_train, y_train, k=5):
         else:
             size = fold_size
             bound = first_fold * (fold_size + 1) + (i - first_fold) * size
-        validation = index[bound : bound + size]
+        validation = index[bound: bound + size]
         training = np.delete(index, np.arange(bound, bound + size))
-        #print("Split: %s, Training index: %s, Validation index: %s" % (i+1, training, validation))
+        print("Split: %s, Training index: %s, Validation index: %s"
+              % (i+1, training, validation))
         k_fold.append([training, validation])
 
     return k_fold
+
 
 def getFold(x_train, y_train, kfold_data, k):
     train, validate = [], []
@@ -54,15 +58,17 @@ def getFold(x_train, y_train, kfold_data, k):
 
     return train, validate
 
+
 def MSE(test, pred):
     err = 0.0
     for i in range(len(test)):
         err += (test[i] - pred[i]) ** 2
     return err / len(test)
 
+
 def gridSearch(x_train, y_train, kfold_data, _SVC=True):
     log = np.zeros((len(C), len(gamma)), dtype=np.float32)
-    
+
     best_c, best_gamma = None, None
     best_acc = 0 if _SVC else -1e8
     for c in range(len(C)):
@@ -80,14 +86,16 @@ def gridSearch(x_train, y_train, kfold_data, _SVC=True):
                     acc[k] = accuracy_score(validate[1], y_pred)
                 else:
                     acc[k] = -1 * MSE(validate[1], y_pred)
-            
+
             log[c][g] = np.average(acc)
             if log[c][g] > best_acc:
                 best_c = C[c]
                 best_gamma = gamma[g]
                 best_acc = log[c][g]
+            log[c][g] = log[c][g] if _SVC else -log[c][g]
 
     return [best_c, best_gamma], log
+
 
 def visualize(log):
     fig = plt.figure(figsize=((8, 5)))
@@ -101,17 +109,19 @@ def visualize(log):
     ax.set_ylabel('C')
     for i in range(len(C)):
         for j in range(len(gamma)):
-            ax.text(j, i, f'{log[i, j]:.2f}', ha="center", va="center", color="w")
+            ax.text(j, i, f'{log[i, j]:.2f}',
+                    ha="center", va="center", color="w")
     ax.set_title("Hyperpparameter Gridsearch")
     ax.figure.colorbar(im, ax=ax)
     plt.show()
+
 
 if __name__ == "__main__":
     x_train = np.load("x_train.npy")
     y_train = np.load("y_train.npy")
     x_test = np.load("x_test.npy")
     y_test = np.load("y_test.npy")
-    
+
     # Question 1
     kfold_data = cross_validation(x_train, y_train, k=10)
     assert len(kfold_data) == 10
@@ -121,35 +131,35 @@ if __name__ == "__main__":
     # Question 2
     best_para, log_SVC = gridSearch(x_train, y_train, kfold_data)
     print(f"\nBest parameters: C = {best_para[0]}, gamma = {best_para[1]}")
-    
+
     # Question 3
     visualize(log_SVC)
-    
+
     # Question 4
     best_model = SVC(C=best_para[0], kernel='rbf', gamma=best_para[1])
     best_model.fit(x_train, y_train)
     y_pred = best_model.predict(x_test)
     print("Accuracy score: ", accuracy_score(y_pred, y_test))
-    
+
     # Question 5
-    print("Question 5-------------------------------------------")
+    print("\n-----Question 5----------------------------------")
     train_df = pd.read_csv("../Homework1/train_data.csv")
-    x_train = train_df['x_train'].to_numpy().reshape(-1,1)
-    y_train = train_df['y_train'].to_numpy().reshape(-1,1)
-    
+    x_train = train_df['x_train'].to_numpy().reshape(-1, 1)
+    y_train = train_df['y_train'].to_numpy().reshape(-1, 1)
+
     test_df = pd.read_csv("../Homework1/test_data.csv")
-    x_test = test_df['x_test'].to_numpy().reshape(-1,1)
-    y_test = test_df['y_test'].to_numpy().reshape(-1,1)
-    
+    x_test = test_df['x_test'].to_numpy().reshape(-1, 1)
+    y_test = test_df['y_test'].to_numpy().reshape(-1, 1)
+
     best_para, log_SVR = gridSearch(x_train, y_train, kfold_data, _SVC=False)
     print(f"\nBest parameters: C = {best_para[0]}, gamma = {best_para[1]}")
-    
+
     visualize(log_SVR)
-    
+
     best_model = SVR(C=best_para[0], kernel='rbf', gamma=best_para[1])
     best_model.fit(x_train, y_train.ravel())
     y_pred = best_model.predict(x_test)
     mse = MSE(y_test, y_pred)
-    
+
     print("Square error of Linear regression:     0.4908853488215349")
     print("Square error of SVM regresssion model:", mse[0])
