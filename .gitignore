@@ -131,3 +131,7 @@ dmypy.json
 *.docx
 *.pdf
 *.rar
+Homework5/x_test.npy
+Homework5/x_train.npy
+Homework5/y_test.npy
+Homework5/y_train.npy
